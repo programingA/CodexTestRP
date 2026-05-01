@@ -1,0 +1,31 @@
+export type Film = {
+  id: number;
+  title: string;
+  description: string;
+  coverImageUrl?: string;
+  mood?: string;
+  createdAt: string;
+  sceneCount: number;
+};
+
+export type MemoryScene = {
+  id: number;
+  filmId: number;
+  title: string;
+  body: string;
+  memoryDate?: string;
+  location?: string;
+  mood?: string;
+  sortOrder: number;
+  mediaUrls: string[];
+};
+
+export type PlaybackFilm = Film & {
+  scenes: MemoryScene[];
+};
+
+export type AuthTokens = {
+  accessToken: string;
+  refreshToken: string;
+  tokenType: "Bearer";
+};
