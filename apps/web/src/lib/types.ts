@@ -16,6 +16,7 @@ export type MemoryScene = {
   memoryDate?: string;
   location?: string;
   mood?: string;
+  tags?: string[];
   sortOrder: number;
   mediaUrls: string[];
 };

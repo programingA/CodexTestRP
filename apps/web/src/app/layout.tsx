@@ -5,7 +5,10 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Cinema Memory",
-  description: "Store memories as cinematic films and replay them through a projector."
+  description: "Store memories as cinematic films and replay them through a projector.",
+  icons: {
+    icon: "/icon.svg"
+  }
 };
 
 export default function RootLayout({

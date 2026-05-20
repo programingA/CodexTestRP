@@ -63,6 +63,13 @@ export async function signup(payload: SignupRequest): Promise<AuthTokens> {
   });
 }
 
+export async function refreshAuthSession(refreshToken: string): Promise<AuthTokens> {
+  return request<AuthTokens>("/auth/refresh", {
+    method: "POST",
+    body: JSON.stringify({ refreshToken })
+  });
+}
+
 export async function getMe(accessToken: string): Promise<MeResponse> {
   return request<MeResponse>("/auth/me", {
     headers: {

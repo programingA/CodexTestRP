@@ -1,8 +1,8 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Film, ImagePlus, Save } from "lucide-react";
+import { ArrowLeft, CalendarDays, Film, ImagePlus, Save, Tags } from "lucide-react";
 import { verifyAuthSession } from "@/lib/auth";
 import { findLocalFilm, updateLocalFilm, writeLocalFilm } from "@/lib/local-films";
 import type { PlaybackFilm } from "@/lib/types";
@@ -10,6 +10,8 @@ import type { PlaybackFilm } from "@/lib/types";
 type SceneDraft = {
   title: string;
   body: string;
+  memoryDate: string;
+  tagsText: string;
   mediaDataUrl: string;
   mediaName: string;
 };
@@ -36,6 +38,8 @@ const MAX_FILE_SIZE = 2 * 1024 * 1024;
 const emptyScene = (): SceneDraft => ({
   title: "",
   body: "",
+  memoryDate: new Date().toISOString().slice(0, 10),
+  tagsText: "",
   mediaDataUrl: "",
   mediaName: ""
 });
@@ -65,6 +69,15 @@ function mediaLabel(dataUrl: string) {
   }
 
   return dataUrl.startsWith("data:video/") ? "기존 동영상" : "기존 이미지";
+}
+
+function parseTags(tagsText: string) {
+  return Array.from(new Set(
+    tagsText
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean)
+  ));
 }
 
 export function CreateFilmClient({ editFilmId }: Props) {
@@ -123,6 +136,8 @@ export function CreateFilmClient({ editFilmId }: Props) {
             return {
               title: scene.title,
               body: scene.body,
+              memoryDate: scene.memoryDate ?? film.createdAt.slice(0, 10),
+              tagsText: scene.tags?.join(", ") ?? "",
               mediaDataUrl,
               mediaName: mediaLabel(mediaDataUrl)
             };
@@ -278,9 +293,10 @@ export function CreateFilmClient({ editFilmId }: Props) {
         filmId: id,
         title: scene.title.trim(),
         body: scene.body.trim(),
-        memoryDate: now.slice(0, 10),
+        memoryDate: scene.memoryDate || now.slice(0, 10),
         location: "",
         mood: mood.trim(),
+        tags: parseTags(scene.tagsText),
         sortOrder: index + 1,
         mediaUrls: [scene.mediaDataUrl]
       }))
@@ -416,6 +432,34 @@ export function CreateFilmClient({ editFilmId }: Props) {
                         />
                         <FieldError message={sceneError.body} />
                       </label>
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <label className="grid gap-2 text-sm text-stone-300">
+                          장면 날짜
+                          <span className="flex items-center gap-2 rounded-md border border-white/10 bg-black/45 px-3 py-3 transition focus-within:border-projector">
+                            <CalendarDays size={16} className="text-stone-500" />
+                            <input
+                              type="date"
+                              value={scene.memoryDate}
+                              onChange={(event) => updateScene(index, { memoryDate: event.target.value })}
+                              className="w-full bg-transparent text-white outline-none"
+                            />
+                          </span>
+                        </label>
+
+                        <label className="grid gap-2 text-sm text-stone-300">
+                          장면 태그
+                          <span className="flex items-center gap-2 rounded-md border border-white/10 bg-black/45 px-3 py-3 transition focus-within:border-projector">
+                            <Tags size={16} className="text-stone-500" />
+                            <input
+                              value={scene.tagsText}
+                              onChange={(event) => updateScene(index, { tagsText: event.target.value })}
+                              className="w-full bg-transparent text-white outline-none"
+                              placeholder="예: 여행, 극장, 가족"
+                            />
+                          </span>
+                        </label>
+                      </div>
 
                       <label className="grid gap-2 text-sm text-stone-300">
                         미디어 업로드

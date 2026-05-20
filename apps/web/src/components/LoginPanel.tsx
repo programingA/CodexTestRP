@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { type FormEvent, type KeyboardEvent, useState } from "react";
 import { KeyRound, Loader2, Mail, UserRound } from "lucide-react";
 import { isApiError, login, signup } from "@/lib/api";
 import { persistAuthSession } from "@/lib/auth";
@@ -88,6 +88,10 @@ export function LoginPanel({ onSuccess }: Props) {
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    if (isSubmitting) {
+      return;
+    }
+
     if (!validate()) {
       setMessage("입력값을 다시 확인해주세요.");
       return;
@@ -131,6 +135,17 @@ export function LoginPanel({ onSuccess }: Props) {
     dashboardRedirect();
   }
 
+  function onFormKeyDown(event: KeyboardEvent<HTMLFormElement>) {
+    if (event.key !== "Enter" || event.nativeEvent.isComposing) {
+      return;
+    }
+
+    if (event.target instanceof HTMLInputElement) {
+      event.preventDefault();
+      event.currentTarget.requestSubmit();
+    }
+  }
+
   return (
     <section className="relative overflow-hidden rounded-lg border border-white/10 bg-stone-950/95 p-5 shadow-reel backdrop-blur md:p-6">
       <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-velvet via-projector to-sky-300" />
@@ -163,7 +178,7 @@ export function LoginPanel({ onSuccess }: Props) {
         ))}
       </div>
 
-      <form className="grid gap-4" onSubmit={onSubmit} noValidate>
+      <form className="grid gap-4" onSubmit={onSubmit} onKeyDown={onFormKeyDown} noValidate>
         {mode === "signup" && (
           <label className="grid gap-2 text-sm text-stone-300">
             닉네임
@@ -190,6 +205,7 @@ export function LoginPanel({ onSuccess }: Props) {
               onChange={(event) => setEmail(event.target.value)}
               className="w-full bg-transparent text-white outline-none"
               placeholder="you@example.com"
+              autoFocus
             />
           </span>
           {errors.email && <span className="text-xs font-medium text-red-400">{errors.email}</span>}
