@@ -29,3 +29,19 @@ export type AuthTokens = {
   refreshToken: string;
   tokenType: "Bearer";
 };
+
+export type MeResponse = {
+  id: number;
+  email: string;
+  displayName: string;
+  avatarUrl?: string | null;
+};
+
+export type LoginRequest = {
+  email: string;
+  password: string;
+};
+
+export type SignupRequest = LoginRequest & {
+  displayName: string;
+};

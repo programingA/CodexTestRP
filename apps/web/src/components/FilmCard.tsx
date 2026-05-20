@@ -8,13 +8,18 @@ import type { Film } from "@/lib/types";
 
 type Props = {
   film: Film;
+  index?: number;
 };
 
-export function FilmCard({ film }: Props) {
+export function FilmCard({ film, index = 0 }: Props) {
   return (
     <motion.article
-      whileHover={{ y: -6, rotateX: 3 }}
-      className="group overflow-hidden rounded-lg border border-white/10 bg-stone-950/78 shadow-reel backdrop-blur"
+      initial={{ opacity: 0, y: 24 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "-80px" }}
+      transition={{ duration: 0.5, delay: index * 0.08 }}
+      whileHover={{ y: -8, rotateX: 3 }}
+      className="group overflow-hidden rounded-lg border border-white/10 bg-stone-950/82 shadow-reel backdrop-blur"
     >
       <div className="film-perforation h-6 bg-stone-900/85" />
       <div className="relative aspect-[16/10] overflow-hidden">
@@ -30,7 +35,11 @@ export function FilmCard({ film }: Props) {
           <div className="h-full bg-gradient-to-br from-velvet to-nitrate" />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+        <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-projector/20 to-transparent opacity-0 transition duration-500 group-hover:opacity-100" />
         <div className="absolute bottom-4 left-4 right-4">
+          <div className="mb-2 inline-flex rounded bg-black/45 px-2 py-1 text-xs text-projector backdrop-blur">
+            {film.mood}
+          </div>
           <h2 className="text-xl font-semibold text-white">{film.title}</h2>
           <p className="mt-1 line-clamp-2 text-sm text-stone-200">{film.description}</p>
         </div>
