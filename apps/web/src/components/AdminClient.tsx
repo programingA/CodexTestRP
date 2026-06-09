@@ -70,10 +70,11 @@ export function AdminClient() {
   const [userRoleFilter, setUserRoleFilter] = useState<UserRoleFilter>("ALL");
   const [userSearchField, setUserSearchField] = useState<UserSearchField>("ALL");
   const [userSearchQuery, setUserSearchQuery] = useState("");
+  const [debouncedUserSearchQuery, setDebouncedUserSearchQuery] = useState("");
 
   const latestFilms = useMemo(() => films.slice(0, 8), [films]);
   const filteredUsers = useMemo(() => {
-    const normalizedQuery = userSearchQuery.trim().toLowerCase();
+    const normalizedQuery = debouncedUserSearchQuery.trim().toLowerCase();
 
     return users.filter((user) => {
       if (userRoleFilter !== "ALL" && user.role !== userRoleFilter) {
@@ -93,7 +94,7 @@ export function AdminClient() {
 
       return searchableValues.some((value) => value.toLowerCase().includes(normalizedQuery));
     });
-  }, [userRoleFilter, userSearchField, userSearchQuery, users]);
+  }, [debouncedUserSearchQuery, userRoleFilter, userSearchField, users]);
 
   async function loadAdminData() {
     const token = getAccessToken();
@@ -148,6 +149,16 @@ export function AdminClient() {
       cancelled = true;
     };
   }, [router]);
+
+  useEffect(() => {
+    const timerId = window.setTimeout(() => {
+      setDebouncedUserSearchQuery(userSearchQuery);
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timerId);
+    };
+  }, [userSearchQuery]);
 
   async function refresh() {
     setIsRefreshing(true);
