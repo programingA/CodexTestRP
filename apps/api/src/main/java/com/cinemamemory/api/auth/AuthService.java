@@ -6,8 +6,10 @@ import com.cinemamemory.api.auth.AuthDtos.SignupRequest;
 import com.cinemamemory.api.auth.AuthDtos.TokenResponse;
 import com.cinemamemory.api.common.ApiException;
 import com.cinemamemory.api.security.JwtService;
+import com.cinemamemory.api.user.ConfiguredAdminService;
 import com.cinemamemory.api.user.User;
 import com.cinemamemory.api.user.UserRepository;
+import com.cinemamemory.api.user.UserRole;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -19,17 +21,20 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
+    private final ConfiguredAdminService configuredAdminService;
 
     public AuthService(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
-            RefreshTokenService refreshTokenService
+            RefreshTokenService refreshTokenService,
+            ConfiguredAdminService configuredAdminService
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.refreshTokenService = refreshTokenService;
+        this.configuredAdminService = configuredAdminService;
     }
 
     @Transactional
@@ -42,28 +47,31 @@ public class AuthService {
                 request.email(),
                 passwordEncoder.encode(request.password()),
                 request.displayName(),
-                null
+                null,
+                configuredAdminService.roleFor(request.email())
         ));
         return issueTokens(user);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public TokenResponse login(LoginRequest request) {
         User user = userRepository.findByEmail(request.email())
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Invalid credentials"));
         if (user.getPasswordHash() == null || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
         }
+        configuredAdminService.applyConfiguredAdminRole(user);
         return issueTokens(user);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public TokenResponse refresh(String refreshToken) {
         Long userId = refreshTokenService.resolve(refreshToken)
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Invalid refresh token"));
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Invalid refresh token"));
 
+        configuredAdminService.applyConfiguredAdminRole(user);
         refreshTokenService.revoke(refreshToken);
         return issueTokens(user);
     }
@@ -72,11 +80,19 @@ public class AuthService {
         refreshTokenService.revoke(refreshToken);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public MeResponse me(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "User not found"));
-        return new MeResponse(user.getId(), user.getEmail(), user.getDisplayName(), user.getAvatarUrl());
+        configuredAdminService.applyConfiguredAdminRole(user);
+        return new MeResponse(
+                user.getId(),
+                user.getEmail(),
+                user.getDisplayName(),
+                user.getAvatarUrl(),
+                user.getRole().name(),
+                user.getRole() == UserRole.ADMIN
+        );
     }
 
     public TokenResponse issueTokens(User user) {

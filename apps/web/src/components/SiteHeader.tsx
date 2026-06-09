@@ -2,14 +2,16 @@
 
 import Link from "next/link";
 import { type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, useEffect, useState } from "react";
-import { Home, LayoutDashboard, LogIn, LogOut, Menu, Projector, Sparkles, X } from "lucide-react";
+import { Home, LayoutDashboard, LogIn, LogOut, Menu, Projector, Sparkles, UserCog, X } from "lucide-react";
 import { LoginPanel } from "@/components/LoginPanel";
 import { clearAuthSession, getAccessToken, verifyAuthSession } from "@/lib/auth";
+import type { MeResponse } from "@/lib/types";
 
 export function SiteHeader() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [currentUser, setCurrentUser] = useState<MeResponse | null>(null);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const isLoggedIn = Boolean(currentUser);
 
   useEffect(() => {
     let cancelled = false;
@@ -17,13 +19,13 @@ export function SiteHeader() {
     const syncAuth = () => {
       const accessToken = getAccessToken();
       if (!accessToken) {
-        setIsLoggedIn(false);
+        setCurrentUser(null);
         return;
       }
 
       void verifyAuthSession().then((me) => {
         if (!cancelled) {
-          setIsLoggedIn(Boolean(me));
+          setCurrentUser(me);
         }
       });
     };
@@ -192,14 +194,26 @@ export function SiteHeader() {
             </Link>
 
             {isLoggedIn ? (
-              <Link
-                href="/dashboard"
-                onClick={closeMenu}
-                className="inline-flex items-center gap-3 rounded-md px-3 py-3 text-stone-200 transition hover:bg-white/10 hover:text-white"
-              >
-                <LayoutDashboard size={17} />
-                대시보드
-              </Link>
+              <>
+                <Link
+                  href="/dashboard"
+                  onClick={closeMenu}
+                  className="inline-flex items-center gap-3 rounded-md px-3 py-3 text-stone-200 transition hover:bg-white/10 hover:text-white"
+                >
+                  <LayoutDashboard size={17} />
+                  대시보드
+                </Link>
+                {currentUser?.admin && (
+                  <Link
+                    href="/admin"
+                    onClick={closeMenu}
+                    className="inline-flex items-center gap-3 rounded-md px-3 py-3 text-stone-200 transition hover:bg-white/10 hover:text-white"
+                  >
+                    <UserCog size={17} />
+                    Admin
+                  </Link>
+                )}
+              </>
             ) : (
               <>
                 <Link

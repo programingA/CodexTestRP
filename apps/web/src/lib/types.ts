@@ -36,6 +36,37 @@ export type MeResponse = {
   email: string;
   displayName: string;
   avatarUrl?: string | null;
+  role: UserRole;
+  admin: boolean;
+};
+
+export type UserRole = "USER" | "ADMIN";
+
+export type AdminSummary = {
+  userCount: number;
+  adminCount: number;
+  filmCount: number;
+  sceneCount: number;
+  mediaCount: number;
+};
+
+export type AdminUser = {
+  id: number;
+  email: string;
+  displayName: string;
+  avatarUrl?: string | null;
+  role: UserRole;
+  createdAt: string;
+};
+
+export type AdminFilm = {
+  id: number;
+  title: string;
+  ownerEmail: string;
+  ownerDisplayName: string;
+  visibility: string;
+  createdAt: string;
+  sceneCount: number;
 };
 
 export type LoginRequest = {

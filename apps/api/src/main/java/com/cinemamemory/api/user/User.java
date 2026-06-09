@@ -2,6 +2,8 @@ package com.cinemamemory.api.user;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -29,6 +31,10 @@ public class User {
     @Column(name = "avatar_url")
     private String avatarUrl;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private UserRole role = UserRole.USER;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -39,10 +45,15 @@ public class User {
     }
 
     public User(String email, String passwordHash, String displayName, String avatarUrl) {
+        this(email, passwordHash, displayName, avatarUrl, UserRole.USER);
+    }
+
+    public User(String email, String passwordHash, String displayName, String avatarUrl, UserRole role) {
         this.email = email;
         this.passwordHash = passwordHash;
         this.displayName = displayName;
         this.avatarUrl = avatarUrl;
+        this.role = role;
     }
 
     @PrePersist
@@ -77,6 +88,10 @@ public class User {
         return avatarUrl;
     }
 
+    public UserRole getRole() {
+        return role;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }
@@ -84,5 +99,9 @@ public class User {
     public void updateProfile(String displayName, String avatarUrl) {
         this.displayName = displayName;
         this.avatarUrl = avatarUrl;
+    }
+
+    public void updateRole(UserRole role) {
+        this.role = role;
     }
 }

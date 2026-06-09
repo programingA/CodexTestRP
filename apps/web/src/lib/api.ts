@@ -1,4 +1,15 @@
-import type { AuthTokens, Film, LoginRequest, MeResponse, PlaybackFilm, SignupRequest } from "@/lib/types";
+import type {
+  AdminFilm,
+  AdminSummary,
+  AdminUser,
+  AuthTokens,
+  Film,
+  LoginRequest,
+  MeResponse,
+  PlaybackFilm,
+  SignupRequest,
+  UserRole
+} from "@/lib/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 
@@ -75,6 +86,40 @@ export async function getMe(accessToken: string): Promise<MeResponse> {
     headers: {
       Authorization: `Bearer ${accessToken}`
     }
+  });
+}
+
+export async function getAdminSummary(accessToken: string): Promise<AdminSummary> {
+  return request<AdminSummary>("/admin/summary", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    }
+  });
+}
+
+export async function getAdminUsers(accessToken: string): Promise<AdminUser[]> {
+  return request<AdminUser[]>("/admin/users", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    }
+  });
+}
+
+export async function getAdminFilms(accessToken: string): Promise<AdminFilm[]> {
+  return request<AdminFilm[]>("/admin/films", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    }
+  });
+}
+
+export async function updateAdminUserRole(accessToken: string, userId: number, role: UserRole): Promise<AdminUser> {
+  return request<AdminUser>(`/admin/users/${userId}/role`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    },
+    body: JSON.stringify({ role })
   });
 }
 

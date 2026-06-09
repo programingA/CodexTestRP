@@ -11,6 +11,10 @@ public interface FilmRepository extends JpaRepository<Film, Long> {
 
     Optional<Film> findByIdAndUserId(Long id, Long userId);
 
+    @EntityGraph(attributePaths = {"user", "scenes"})
+    @Query("select distinct f from Film f order by f.createdAt desc")
+    List<Film> findAllForAdmin();
+
     @EntityGraph(attributePaths = {"scenes"})
     @Query("select f from Film f where f.id = :id and f.user.id = :userId")
     Optional<Film> findWithScenesByIdAndUserId(Long id, Long userId);

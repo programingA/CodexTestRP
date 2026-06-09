@@ -43,6 +43,7 @@ spring:
 
 app:
   frontend-url: ${FRONTEND_URL:http://localhost:3000}
+  admin-emails: ${ADMIN_EMAILS:}
   jwt:
     issuer: cinema-memory
     secret: ${JWT_SECRET:change-this-secret-to-at-least-256-bits-before-production}
