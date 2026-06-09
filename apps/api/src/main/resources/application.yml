@@ -43,7 +43,10 @@ spring:
 
 app:
   frontend-url: ${FRONTEND_URL:http://localhost:3000}
-  admin-emails: ${ADMIN_EMAILS:}
+  admin:
+    email: ${ADMIN_EMAIL:admin@naver.com}
+    password: ${ADMIN_PASSWORD:12345678}
+    display-name: ${ADMIN_DISPLAY_NAME:Administrator}
   jwt:
     issuer: cinema-memory
     secret: ${JWT_SECRET:change-this-secret-to-at-least-256-bits-before-production}

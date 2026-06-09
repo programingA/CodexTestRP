@@ -38,7 +38,7 @@ public class AdminService {
     @Transactional(readOnly = true)
     public AdminSummaryResponse summary() {
         return new AdminSummaryResponse(
-                userRepository.count(),
+                userRepository.countByRole(UserRole.USER),
                 userRepository.countByRole(UserRole.ADMIN),
                 filmRepository.count(),
                 sceneRepository.count(),

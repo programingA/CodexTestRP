@@ -1,6 +1,5 @@
 package com.cinemamemory.api.auth;
 
-import com.cinemamemory.api.user.ConfiguredAdminService;
 import com.cinemamemory.api.user.User;
 import com.cinemamemory.api.user.UserRepository;
 import java.util.Map;
@@ -15,16 +14,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class OAuth2UserProvisionService extends DefaultOAuth2UserService {
     private final UserRepository userRepository;
     private final OAuthAccountRepository oauthAccountRepository;
-    private final ConfiguredAdminService configuredAdminService;
 
     public OAuth2UserProvisionService(
             UserRepository userRepository,
-            OAuthAccountRepository oauthAccountRepository,
-            ConfiguredAdminService configuredAdminService
+            OAuthAccountRepository oauthAccountRepository
     ) {
         this.userRepository = userRepository;
         this.oauthAccountRepository = oauthAccountRepository;
-        this.configuredAdminService = configuredAdminService;
     }
 
     @Override
@@ -34,20 +30,17 @@ public class OAuth2UserProvisionService extends DefaultOAuth2UserService {
         String provider = userRequest.getClientRegistration().getRegistrationId();
         OAuthProfile profile = OAuthProfile.from(provider, oauth2User.getAttributes());
 
-        OAuthAccount account = oauthAccountRepository.findByProviderAndProviderUserId(provider, profile.providerUserId())
+        oauthAccountRepository.findByProviderAndProviderUserId(provider, profile.providerUserId())
                 .orElseGet(() -> {
                     User user = userRepository.findByEmail(profile.email())
                             .orElseGet(() -> userRepository.save(new User(
                                     profile.email(),
                                     null,
                                     profile.displayName(),
-                                    profile.avatarUrl(),
-                                    configuredAdminService.roleFor(profile.email())
+                                    profile.avatarUrl()
                             )));
-                    configuredAdminService.applyConfiguredAdminRole(user);
                     return oauthAccountRepository.save(new OAuthAccount(user, provider, profile.providerUserId(), profile.email()));
                 });
-        configuredAdminService.applyConfiguredAdminRole(account.getUser());
 
         return oauth2User;
     }

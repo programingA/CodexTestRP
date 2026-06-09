@@ -12,4 +12,6 @@ target/
 .env.*
 !.env.example
 *.log
+uploads/
+apps/api/uploads/
 .DS_Store

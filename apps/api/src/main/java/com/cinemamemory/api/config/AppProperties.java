@@ -1,16 +1,22 @@
 package com.cinemamemory.api.config;
 
 import java.time.Duration;
-import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "app")
 public record AppProperties(
         String frontendUrl,
-        List<String> adminEmails,
+        Admin admin,
         Jwt jwt,
         Aws aws
 ) {
+    public record Admin(
+            String email,
+            String password,
+            String displayName
+    ) {
+    }
+
     public record Jwt(
             String issuer,
             String secret,

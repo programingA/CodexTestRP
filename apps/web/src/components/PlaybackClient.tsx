@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowLeft, Clock, Film } from "lucide-react";
 import { ProjectorScene } from "@/components/ProjectorScene";
-import { verifyAuthSession } from "@/lib/auth";
-import { findLocalFilm } from "@/lib/local-films";
+import { getAccessToken, verifyAuthSession } from "@/lib/auth";
+import { getPlaybackFilm, isApiError } from "@/lib/api";
 import { findDemoPlaybackFilm } from "@/lib/mock-data";
 import type { PlaybackFilm } from "@/lib/types";
 
@@ -20,19 +20,6 @@ export function PlaybackClient({ filmId }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    const demoFilm = findDemoPlaybackFilm(filmId);
-
-    if (demoFilm) {
-      queueMicrotask(() => {
-        if (!cancelled) {
-          setFilm(demoFilm);
-          setIsReady(true);
-        }
-      });
-      return () => {
-        cancelled = true;
-      };
-    }
 
     void verifyAuthSession().then((me) => {
       if (cancelled) {
@@ -40,23 +27,40 @@ export function PlaybackClient({ filmId }: Props) {
       }
 
       if (!me) {
+        const demoFilm = findDemoPlaybackFilm(filmId);
         queueMicrotask(() => {
           if (!cancelled) {
-            setRequiresLogin(true);
-            setFilm(null);
+            setRequiresLogin(!demoFilm);
+            setFilm(demoFilm ?? null);
             setIsReady(true);
           }
         });
         return;
       }
 
-      const localFilm = findLocalFilm(filmId);
-      queueMicrotask(() => {
-        if (!cancelled) {
-          setFilm(localFilm ?? null);
-          setIsReady(true);
-        }
-      });
+      void getPlaybackFilm(getAccessToken(), filmId)
+        .then((serverFilm) => {
+          if (!cancelled) {
+            setFilm(serverFilm);
+            setIsReady(true);
+          }
+        })
+        .catch((error) => {
+          if (!cancelled) {
+            if (isApiError(error) && error.status === 401) {
+              setRequiresLogin(true);
+              setFilm(null);
+              setIsReady(true);
+              return;
+            }
+
+            const demoFilm = isApiError(error) && error.status === 404
+              ? findDemoPlaybackFilm(filmId)
+              : undefined;
+            setFilm(demoFilm ?? null);
+            setIsReady(true);
+          }
+        });
     });
 
     return () => {

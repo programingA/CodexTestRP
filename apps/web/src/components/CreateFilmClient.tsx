@@ -3,17 +3,28 @@
 import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, CalendarDays, Film, ImagePlus, Save, Tags } from "lucide-react";
-import { verifyAuthSession } from "@/lib/auth";
-import { findLocalFilm, updateLocalFilm, writeLocalFilm } from "@/lib/local-films";
-import type { PlaybackFilm } from "@/lib/types";
+import {
+  createFilm,
+  createScene,
+  deleteScene,
+  getPlaybackFilm,
+  updateFilm,
+  updateScene as updateSceneRequest,
+  uploadSceneMedia
+} from "@/lib/api";
+import { getAccessToken, verifyAuthSession } from "@/lib/auth";
+import type { PlaybackFilm, SceneRequest } from "@/lib/types";
 
 type SceneDraft = {
+  sceneId?: number;
   title: string;
   body: string;
   memoryDate: string;
   tagsText: string;
   mediaDataUrl: string;
   mediaName: string;
+  existingMediaUrl: string;
+  mediaFile: File | null;
 };
 
 type SceneErrors = {
@@ -41,7 +52,9 @@ const emptyScene = (): SceneDraft => ({
   memoryDate: new Date().toISOString().slice(0, 10),
   tagsText: "",
   mediaDataUrl: "",
-  mediaName: ""
+  mediaName: "",
+  existingMediaUrl: "",
+  mediaFile: null
 });
 
 function inputClass(hasError: boolean) {
@@ -71,15 +84,6 @@ function mediaLabel(dataUrl: string) {
   return dataUrl.startsWith("data:video/") ? "기존 동영상" : "기존 이미지";
 }
 
-function parseTags(tagsText: string) {
-  return Array.from(new Set(
-    tagsText
-      .split(",")
-      .map((tag) => tag.trim())
-      .filter(Boolean)
-  ));
-}
-
 export function CreateFilmClient({ editFilmId }: Props) {
   const router = useRouter();
   const [isReady, setIsReady] = useState(false);
@@ -91,11 +95,12 @@ export function CreateFilmClient({ editFilmId }: Props) {
   const [errors, setErrors] = useState<FilmErrors>({});
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [existingSceneIds, setExistingSceneIds] = useState<number[]>([]);
 
   useEffect(() => {
     let cancelled = false;
 
-    void verifyAuthSession().then((me) => {
+    void verifyAuthSession().then(async (me) => {
       if (cancelled) {
         return;
       }
@@ -115,8 +120,10 @@ export function CreateFilmClient({ editFilmId }: Props) {
         return;
       }
 
-      const film = findLocalFilm(editFilmId);
-      if (!film) {
+      let film: PlaybackFilm;
+      try {
+        film = await getPlaybackFilm(getAccessToken(), editFilmId);
+      } catch {
         router.replace("/dashboard");
         return;
       }
@@ -130,16 +137,20 @@ export function CreateFilmClient({ editFilmId }: Props) {
         setDescription(film.description);
         setMood(film.mood ?? "");
         setSceneCount(film.scenes.length);
+        setExistingSceneIds(film.scenes.map((scene) => scene.id));
         setScenes(
           film.scenes.map((scene) => {
             const mediaDataUrl = scene.mediaUrls[0] ?? "";
             return {
+              sceneId: scene.id,
               title: scene.title,
               body: scene.body,
               memoryDate: scene.memoryDate ?? film.createdAt.slice(0, 10),
               tagsText: scene.tags?.join(", ") ?? "",
               mediaDataUrl,
-              mediaName: mediaLabel(mediaDataUrl)
+              mediaName: mediaLabel(mediaDataUrl),
+              existingMediaUrl: mediaDataUrl,
+              mediaFile: null
             };
           })
         );
@@ -198,7 +209,8 @@ export function CreateFilmClient({ editFilmId }: Props) {
     const mediaDataUrl = await readFileAsDataUrl(file);
     updateScene(index, {
       mediaDataUrl,
-      mediaName: file.name
+      mediaName: file.name,
+      mediaFile: file
     });
     setErrors((current) => ({
       ...current,
@@ -277,40 +289,60 @@ export function CreateFilmClient({ editFilmId }: Props) {
       return;
     }
 
-    const now = new Date().toISOString();
-    const id = editFilmId ?? Date.now();
-    const existing = editFilmId ? findLocalFilm(editFilmId) : null;
-    const film: PlaybackFilm = {
-      id,
-      title: title.trim(),
-      description: description.trim(),
-      coverImageUrl: scenes[0]?.mediaDataUrl,
-      mood: mood.trim(),
-      createdAt: existing?.createdAt ?? now,
-      sceneCount: scenes.length,
-      scenes: scenes.map((scene, index) => ({
-        id: id + index + 1,
-        filmId: id,
-        title: scene.title.trim(),
-        body: scene.body.trim(),
-        memoryDate: scene.memoryDate || now.slice(0, 10),
-        location: "",
-        mood: mood.trim(),
-        tags: parseTags(scene.tagsText),
-        sortOrder: index + 1,
-        mediaUrls: [scene.mediaDataUrl]
-      }))
-    };
-
     try {
-      if (editFilmId) {
-        updateLocalFilm(film);
-      } else {
-        writeLocalFilm(film);
+      const accessToken = getAccessToken();
+      const filmPayload = {
+        title: title.trim(),
+        description: description.trim(),
+        coverImageUrl: scenes[0]?.existingMediaUrl || undefined,
+        mood: mood.trim()
+      };
+      const savedFilm = editFilmId
+        ? await updateFilm(accessToken, editFilmId, filmPayload)
+        : await createFilm(accessToken, filmPayload);
+      const filmId = savedFilm.id;
+      const savedSceneIds = new Set<number>();
+      let coverImageUrl = scenes[0]?.existingMediaUrl || savedFilm.coverImageUrl;
+
+      for (const [index, scene] of scenes.entries()) {
+        const scenePayload: SceneRequest = {
+          title: scene.title.trim(),
+          body: scene.body.trim(),
+          memoryDate: scene.memoryDate || undefined,
+          location: "",
+          mood: mood.trim(),
+          sortOrder: index + 1
+        };
+        const savedScene = scene.sceneId
+          ? await updateSceneRequest(accessToken, filmId, scene.sceneId, scenePayload)
+          : await createScene(accessToken, filmId, scenePayload);
+
+        savedSceneIds.add(savedScene.id);
+
+        if (scene.mediaFile) {
+          const media = await uploadSceneMedia(accessToken, savedScene.id, scene.mediaFile);
+          if (index === 0) {
+            coverImageUrl = media.cdnUrl;
+          }
+        }
       }
-      router.push(`/films/${film.id}/playback`);
+
+      for (const sceneId of existingSceneIds) {
+        if (!savedSceneIds.has(sceneId)) {
+          await deleteScene(accessToken, filmId, sceneId);
+        }
+      }
+
+      if (coverImageUrl && coverImageUrl !== savedFilm.coverImageUrl) {
+        await updateFilm(accessToken, filmId, {
+          ...filmPayload,
+          coverImageUrl
+        });
+      }
+
+      router.push(`/films/${filmId}/playback`);
     } catch {
-      setSubmitError("브라우저 저장소 용량이 부족합니다. 더 작은 이미지나 짧은 동영상을 업로드해주세요.");
+      setSubmitError("서버 데이터베이스에 저장하지 못했습니다. 백엔드와 미디어 업로드 설정을 확인해주세요.");
       setIsSubmitting(false);
     }
   }

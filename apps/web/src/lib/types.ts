@@ -4,6 +4,7 @@ export type Film = {
   description: string;
   coverImageUrl?: string;
   mood?: string;
+  visibility?: string;
   createdAt: string;
   sceneCount: number;
 };
@@ -76,4 +77,31 @@ export type LoginRequest = {
 
 export type SignupRequest = LoginRequest & {
   displayName: string;
+};
+
+export type FilmRequest = {
+  title: string;
+  description?: string;
+  coverImageUrl?: string;
+  mood?: string;
+};
+
+export type SceneRequest = {
+  title: string;
+  body: string;
+  memoryDate?: string;
+  location?: string;
+  mood?: string;
+  sortOrder: number;
+};
+
+export type PresignedUrlResponse = {
+  uploadUrl: string;
+  s3Key: string;
+  cdnUrl: string;
+};
+
+export type MediaResponse = {
+  id: number;
+  cdnUrl: string;
 };

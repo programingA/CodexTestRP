@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Clapperboard, Edit3, Film, Play, Plus, Search, ShieldCheck, Trash2, Video, X } from "lucide-react";
-import { verifyAuthSession } from "@/lib/auth";
-import { deleteLocalFilm, readLocalFilms } from "@/lib/local-films";
-import type { PlaybackFilm } from "@/lib/types";
+import { getAccessToken, verifyAuthSession } from "@/lib/auth";
+import { deleteFilm as deleteFilmRequest, getFilms } from "@/lib/api";
+import type { Film as FilmItem } from "@/lib/types";
 
 function isVideoMedia(url?: string) {
   if (!url) {
@@ -16,19 +16,12 @@ function isVideoMedia(url?: string) {
   return url.startsWith("data:video/") || /\.(mp4|webm|ogg)(\?|$)/i.test(url);
 }
 
-function getFilmSearchText(film: PlaybackFilm) {
+function getFilmSearchText(film: FilmItem) {
   return [
     film.title,
     film.description,
     film.mood,
-    ...film.scenes.flatMap((scene) => [
-      scene.title,
-      scene.body,
-      scene.location,
-      scene.mood,
-      scene.memoryDate,
-      ...(scene.tags ?? [])
-    ])
+    film.visibility
   ]
     .filter(Boolean)
     .join(" ")
@@ -38,15 +31,16 @@ function getFilmSearchText(film: PlaybackFilm) {
 export function DashboardClient() {
   const router = useRouter();
   const [isReady, setIsReady] = useState(false);
-  const [localFilms, setLocalFilms] = useState<PlaybackFilm[]>([]);
+  const [serverFilms, setServerFilms] = useState<FilmItem[]>([]);
   const [currentUser, setCurrentUserLabel] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
 
-    void verifyAuthSession().then((me) => {
+    void verifyAuthSession().then(async (me) => {
       if (cancelled) {
         return;
       }
@@ -57,13 +51,20 @@ export function DashboardClient() {
         return;
       }
 
-      queueMicrotask(() => {
+      try {
+        const films = await getFilms(getAccessToken());
         if (!cancelled) {
           setCurrentUserLabel(me.email);
-          setLocalFilms(readLocalFilms());
+          setServerFilms(films);
           setIsReady(true);
         }
-      });
+      } catch {
+        if (!cancelled) {
+          setLoadError("Saved films could not be loaded from the server.");
+          setCurrentUserLabel(me.email);
+          setIsReady(true);
+        }
+      }
     });
 
     return () => {
@@ -84,25 +85,29 @@ export function DashboardClient() {
   const normalizedSearchQuery = debouncedSearchQuery.toLowerCase();
   const films = useMemo(() => {
     if (!normalizedSearchQuery) {
-      return localFilms;
+      return serverFilms;
     }
 
-    return localFilms.filter((film) => getFilmSearchText(film).includes(normalizedSearchQuery));
-  }, [localFilms, normalizedSearchQuery]);
+    return serverFilms.filter((film) => getFilmSearchText(film).includes(normalizedSearchQuery));
+  }, [serverFilms, normalizedSearchQuery]);
   const totalSceneCount = useMemo(
-    () => localFilms.reduce((count, film) => count + film.sceneCount, 0),
-    [localFilms]
+    () => serverFilms.reduce((count, film) => count + film.sceneCount, 0),
+    [serverFilms]
   );
   const isSearching = debouncedSearchQuery.length > 0;
 
-  function deleteFilm(filmId: number) {
-    const ok = window.confirm("이 필름을 삭제할까요? 삭제하면 현재 브라우저 저장소에서 제거됩니다.");
+  async function deleteFilm(filmId: number) {
+    const ok = window.confirm("이 필름을 삭제할까요? 삭제하면 서버 데이터베이스에서 제거됩니다.");
     if (!ok) {
       return;
     }
 
-    deleteLocalFilm(filmId);
-    setLocalFilms(readLocalFilms());
+    try {
+      await deleteFilmRequest(getAccessToken(), filmId);
+      setServerFilms((current) => current.filter((film) => film.id !== filmId));
+    } catch {
+      setLoadError("The film could not be deleted from the server.");
+    }
   }
 
   if (!isReady) {
@@ -129,7 +134,7 @@ export function DashboardClient() {
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-stone-500">Dashboard</p>
               <div className="mt-3 grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <p className="text-2xl font-semibold text-white">{localFilms.length}</p>
+                  <p className="text-2xl font-semibold text-white">{serverFilms.length}</p>
                   <p className="mt-1 text-stone-500">필름</p>
                 </div>
                 <div>
@@ -181,6 +186,12 @@ export function DashboardClient() {
         </aside>
 
         <div className="min-w-0">
+          {loadError && (
+            <div className="mb-5 rounded-lg border border-red-400/30 bg-red-950/20 px-4 py-3 text-sm text-red-100">
+              {loadError}
+            </div>
+          )}
+
           <section className="mb-8 border-b border-white/10 pb-7">
             <div className="mb-3 inline-flex items-center gap-2 rounded-md bg-projector/10 px-3 py-1 text-xs font-semibold text-projector">
               <Clapperboard size={14} />
@@ -199,11 +210,11 @@ export function DashboardClient() {
                 <h2 className="text-lg font-semibold">내 필름</h2>
               </div>
               <span className="text-sm text-stone-500">
-                {isSearching ? `${films.length} / ${localFilms.length}개 표시` : `${localFilms.length}개 표시`}
+                {isSearching ? `${films.length} / ${serverFilms.length}개 표시` : `${serverFilms.length}개 표시`}
               </span>
             </div>
 
-            {localFilms.length === 0 ? (
+            {serverFilms.length === 0 ? (
               <div className="rounded-lg border border-white/10 bg-stone-950/70 p-8 text-center">
                 <Film className="mx-auto text-projector" size={34} />
                 <h3 className="mt-4 text-xl font-semibold text-white">아직 만든 필름이 없습니다</h3>
@@ -284,7 +295,7 @@ export function DashboardClient() {
                         </Link>
                         <button
                           type="button"
-                          onClick={() => deleteFilm(film.id)}
+                          onClick={() => void deleteFilm(film.id)}
                           className="inline-grid h-10 place-items-center rounded-md border border-red-400/30 text-red-300 transition hover:bg-red-950/30"
                           aria-label={`${film.title} 삭제`}
                           title="삭제"

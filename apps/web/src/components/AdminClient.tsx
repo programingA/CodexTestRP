@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { Clapperboard, Film, RefreshCw, ShieldCheck, Users } from "lucide-react";
+import { Clapperboard, Film, RefreshCw, Search, ShieldCheck, Users, X } from "lucide-react";
 import {
   getAdminFilms,
   getAdminSummary,
@@ -21,6 +21,9 @@ const EMPTY_SUMMARY: AdminSummary = {
   sceneCount: 0,
   mediaCount: 0
 };
+
+type UserRoleFilter = "ALL" | UserRole;
+type UserSearchField = "ALL" | "EMAIL" | "NAME";
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -64,8 +67,33 @@ export function AdminClient() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [films, setFilms] = useState<AdminFilm[]>([]);
   const [updatingUserId, setUpdatingUserId] = useState<number | null>(null);
+  const [userRoleFilter, setUserRoleFilter] = useState<UserRoleFilter>("ALL");
+  const [userSearchField, setUserSearchField] = useState<UserSearchField>("ALL");
+  const [userSearchQuery, setUserSearchQuery] = useState("");
 
   const latestFilms = useMemo(() => films.slice(0, 8), [films]);
+  const filteredUsers = useMemo(() => {
+    const normalizedQuery = userSearchQuery.trim().toLowerCase();
+
+    return users.filter((user) => {
+      if (userRoleFilter !== "ALL" && user.role !== userRoleFilter) {
+        return false;
+      }
+
+      if (!normalizedQuery) {
+        return true;
+      }
+
+      const searchableValues =
+        userSearchField === "EMAIL"
+          ? [user.email]
+          : userSearchField === "NAME"
+            ? [user.displayName]
+            : [user.email, user.displayName, user.role];
+
+      return searchableValues.some((value) => value.toLowerCase().includes(normalizedQuery));
+    });
+  }, [userRoleFilter, userSearchField, userSearchQuery, users]);
 
   async function loadAdminData() {
     const token = getAccessToken();
@@ -148,6 +176,7 @@ export function AdminClient() {
       setUsers(nextUsers);
       setSummary({
         ...summary,
+        userCount: nextUsers.filter((item) => item.role === "USER").length,
         adminCount: nextUsers.filter((item) => item.role === "ADMIN").length
       });
     } catch (roleError) {
@@ -214,7 +243,7 @@ export function AdminClient() {
         )}
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-          <StatTile label="Users" value={summary.userCount} icon={<Users size={18} />} />
+          <StatTile label="Regular Users" value={summary.userCount} icon={<Users size={18} />} />
           <StatTile label="Admins" value={summary.adminCount} icon={<ShieldCheck size={18} />} />
           <StatTile label="Films" value={summary.filmCount} icon={<Film size={18} />} />
           <StatTile label="Scenes" value={summary.sceneCount} icon={<Clapperboard size={18} />} />
@@ -225,7 +254,61 @@ export function AdminClient() {
           <div>
             <div className="mb-4 flex items-center justify-between gap-3">
               <h2 className="text-lg font-semibold text-white">Users</h2>
-              <span className="text-sm text-stone-500">{users.length.toLocaleString()} total</span>
+              <span className="text-sm text-stone-500">
+                {filteredUsers.length.toLocaleString()} / {users.length.toLocaleString()} shown
+              </span>
+            </div>
+
+            <div className="mb-4 grid gap-3 rounded-lg border border-white/10 bg-stone-950/80 p-4 md:grid-cols-[auto_minmax(0,1fr)]">
+              <div className="flex flex-wrap gap-2">
+                {(["ALL", "USER", "ADMIN"] as const).map((role) => (
+                  <button
+                    key={role}
+                    type="button"
+                    onClick={() => setUserRoleFilter(role)}
+                    className={`h-10 rounded-md px-3 text-sm font-semibold transition ${
+                      userRoleFilter === role
+                        ? "bg-projector text-stone-950"
+                        : "border border-white/10 text-stone-200 hover:bg-white/10"
+                    }`}
+                  >
+                    {role === "ALL" ? "All" : role === "USER" ? "Users" : "Admins"}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-[9rem_minmax(0,1fr)]">
+                <select
+                  value={userSearchField}
+                  onChange={(event) => setUserSearchField(event.target.value as UserSearchField)}
+                  className="h-10 rounded-md border border-white/10 bg-black/45 px-3 text-sm text-white outline-none transition focus:border-projector"
+                  aria-label="User search category"
+                >
+                  <option value="ALL">All fields</option>
+                  <option value="EMAIL">Email</option>
+                  <option value="NAME">Name</option>
+                </select>
+
+                <div className="relative">
+                  <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-500" />
+                  <input
+                    value={userSearchQuery}
+                    onChange={(event) => setUserSearchQuery(event.target.value)}
+                    className="h-10 w-full rounded-md border border-white/10 bg-black/45 pl-10 pr-10 text-sm text-white outline-none transition placeholder:text-stone-600 focus:border-projector"
+                    placeholder="Search users"
+                  />
+                  {userSearchQuery && (
+                    <button
+                      type="button"
+                      aria-label="Clear user search"
+                      onClick={() => setUserSearchQuery("")}
+                      className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-stone-400 transition hover:bg-white/10 hover:text-white"
+                    >
+                      <X size={15} />
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="overflow-x-auto rounded-lg border border-white/10 bg-stone-950/80">
@@ -239,7 +322,7 @@ export function AdminClient() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/10">
-                  {users.map((user) => {
+                  {filteredUsers.map((user) => {
                     const isSelf = user.id === currentUserId;
                     const nextRole: UserRole = user.role === "ADMIN" ? "USER" : "ADMIN";
 
@@ -274,6 +357,13 @@ export function AdminClient() {
                       </tr>
                     );
                   })}
+                  {filteredUsers.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-8 text-center text-sm text-stone-500">
+                        No users match the current filters.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

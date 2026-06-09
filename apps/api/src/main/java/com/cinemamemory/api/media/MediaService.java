@@ -12,12 +12,17 @@ import com.cinemamemory.api.media.MediaDtos.PresignedUrlRequest;
 import com.cinemamemory.api.media.MediaDtos.PresignedUrlResponse;
 import com.cinemamemory.api.user.User;
 import com.cinemamemory.api.user.UserRepository;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
@@ -62,6 +67,48 @@ public class MediaService {
 
         String uploadUrl = s3Presigner.presignPutObject(presignRequest).url().toString();
         return new PresignedUrlResponse(uploadUrl, s3Key, cdnUrl(s3Key));
+    }
+
+    @Transactional
+    public MediaResponse uploadLocalMedia(Long userId, Long sceneId, MultipartFile file) {
+        if (file.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Media file is empty");
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "User not found"));
+        MemoryScene scene = sceneRepository.findByIdAndFilmUserId(sceneId, userId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Scene not found"));
+
+        String originalName = file.getOriginalFilename() == null ? "media" : file.getOriginalFilename();
+        String safeName = originalName.replaceAll("[^A-Za-z0-9._-]", "_").toLowerCase(Locale.ROOT);
+        String storedName = UUID.randomUUID() + "-" + safeName;
+        Path uploadDir = Path.of("uploads", "media").toAbsolutePath().normalize();
+        Path target = uploadDir.resolve(storedName).normalize();
+
+        if (!target.startsWith(uploadDir)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid media file name");
+        }
+
+        try {
+            Files.createDirectories(uploadDir);
+            Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException exception) {
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Media file could not be stored");
+        }
+
+        String contentType = file.getContentType() == null ? "application/octet-stream" : file.getContentType();
+        String mediaUrl = "/uploads/media/" + storedName;
+        MediaAsset media = mediaAssetRepository.save(new MediaAsset(
+                scene,
+                user,
+                "local/" + storedName,
+                mediaUrl,
+                contentType,
+                file.getSize(),
+                null
+        ));
+        return new MediaResponse(media.getId(), media.getCdnUrl());
     }
 
     @Transactional
